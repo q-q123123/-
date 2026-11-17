@@ -1,0 +1,88 @@
+name: build-apk
+
+on:
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - uses: android-actions/setup-android@v3
+
+      - name: 安装依赖
+        run: npm install
+
+      - name: 生成 Android 工程
+        run: npx cap add android
+
+      - name: 同步网页资源
+        run: npx cap sync android
+
+      - name: 编译 APK
+        run: |
+          cd android
+          chmod +x gradlew
+          ./gradlew assembleDebug --no-daemon
+
+      - name: 准备签名密钥
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+        run: |
+          if [ -n "$KEYSTORE_BASE64" ]; then
+            echo "$KEYSTORE_BASE64" | base64 -d > keystore.jks
+            echo "使用仓库中配置的签名密钥"
+          else
+            echo "::warning::没有配置 KEYSTORE_BASE64，本次自动生成一把新密钥，产物里会附带 keystore.jks，请务必下载保存"
+            keytool -genkeypair -keystore keystore.jks -storetype JKS \
+              -keyalg RSA -keysize 2048 -validity 10950 \
+              -alias wttrend -storepass wttrend2026 -keypass wttrend2026 \
+              -dname "CN=WT Trend, OU=Personal, O=WT Trend, L=Beijing, ST=Beijing, C=CN"
+            printf 'alias: wttrend\nkeystore password: wttrend2026\nkey password: wttrend2026\n' > 签名信息.txt
+          fi
+
+      - name: 签名 APK
+        env:
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          ALIAS=${KEY_ALIAS:-wttrend}
+          SPASS=${KEYSTORE_PASSWORD:-wttrend2026}
+          KPASS=${KEY_PASSWORD:-wttrend2026}
+          BT=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -n 1)
+          "$BT/apksigner" sign --ks keystore.jks \
+            --ks-key-alias "$ALIAS" \
+            --ks-pass "pass:$SPASS" \
+            --key-pass "pass:$KPASS" \
+            --out app-signed.apk \
+            android/app/build/outputs/apk/debug/app-debug.apk
+          "$BT/apksigner" verify app-signed.apk
+
+      - name: 上传 APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-signed
+          path: app-signed.apk
+          if-no-files-found: error
+
+      - name: 上传签名密钥（仅自动生成时）
+        uses: actions/upload-artifact@v4
+        with:
+          name: signing-key
+          path: |
+            keystore.jks
+            签名信息.txt
+          if-no-files-found: ignore
