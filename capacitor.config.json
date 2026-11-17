@@ -1,0 +1,13 @@
+{
+  "appId": "com.wttrend.app",
+  "appName": "体重趋势",
+  "webDir": "www",
+  "android": {
+    "backgroundColor": "#0b1220",
+    "allowMixedContent": false,
+    "captureInput": true
+  },
+  "server": {
+    "androidScheme": "https"
+  }
+}
