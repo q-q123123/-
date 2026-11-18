@@ -552,3 +552,67 @@ button.chip { cursor: pointer; font-family: inherit; }
   user-select: text;
 }
 .paste-box textarea:focus { border-color: var(--accent); }
+/* ---------- 折叠卡片（设置页 / 分析页） ---------- */
+details.card.fold { padding: 0; gap: 0; overflow: hidden; }
+details.card.fold > summary.fold-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 14px;
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+}
+details.card.fold > summary.fold-head::-webkit-details-marker { display: none; }
+details.card.fold > summary.fold-head::marker { content: ''; }
+details.card.fold[open] > summary.fold-head { border-bottom: 1px solid var(--line); }
+.fold-digest { margin-left: auto; font-size: 12px; color: var(--dim); font-variant-numeric: tabular-nums; }
+.chev {
+  font-style: normal;
+  color: var(--dim);
+  font-size: 15px;
+  transition: transform .16s ease;
+  display: inline-block;
+}
+details[open] > summary .chev { transform: rotate(90deg); }
+.fold-body {
+  padding: 10px 14px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* ---------- 记录页：特殊情况折叠 ---------- */
+.ev-block { display: flex; flex-direction: column; gap: 8px; }
+.collapse-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  background: none;
+  border: 0;
+  border-top: 1px solid var(--line);
+  padding: 12px 0 6px;
+  margin-top: 4px;
+  font-family: inherit;
+  font-size: 13px;
+  color: var(--muted);
+  cursor: pointer;
+}
+.collapse-hint { margin-left: auto; font-size: 12px; color: var(--dim); }
+.ev-panel { display: none; padding-bottom: 4px; }
+.ev-block.open .ev-panel { display: block; }
+.ev-block.open .ev-summary { display: none; }
+.ev-block.open .chev { transform: rotate(90deg); }
+.ev-summary { gap: 6px; }
+
+/* ---------- 图例：用形状区分，不再只靠颜色 ---------- */
+.legend .mk { display: inline-block; vertical-align: middle; margin-right: 5px; }
+.legend .mk.dot { width: 7px; height: 7px; border-radius: 50%; background: #94a3b8; }
+.legend .mk.hollow { width: 7px; height: 7px; border-radius: 50%; border: 1.5px solid #cbd5e1; background: transparent; }
+.legend .mk.line { width: 15px; height: 3px; border-radius: 2px; vertical-align: 4px; }
+.legend .mk.line.thin { height: 2px; opacity: .85; }
+.legend .mk.dash { width: 15px; height: 0; border-top: 2px dashed #f59e0b; vertical-align: 4px; }
+
+/* ---------- 周表默认 4 周 ---------- */
+.weeks-wrap:not(.open) tbody tr:nth-child(n+5) { display: none; }

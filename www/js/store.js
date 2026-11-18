@@ -76,7 +76,8 @@
         showRaw: true,
         showPost: true,
         convertPost: false,
-        excludeEventDays: false
+        excludeEventDays: false,
+        forecastModel: 'auto'
       },
       tombstones: [],
       meta: { createdAt: nowMs(), lastExportAt: null, lastImportAt: null }
@@ -160,6 +161,9 @@
       ['showRaw', 'showPost', 'convertPost', 'excludeEventDays'].forEach(function (k) {
         if (typeof s[k] === 'boolean') db.settings[k] = s[k];
       });
+      if (s.forecastModel === 'auto' || s.forecastModel === 'linear' || s.forecastModel === 'decay') {
+        db.settings.forecastModel = s.forecastModel;
+      }
     }
 
     // v3 起：训练后体重只作参考，不再折算进晨起序列（老数据一次性迁移）

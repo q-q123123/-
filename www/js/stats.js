@@ -292,25 +292,50 @@
   }
 
   /* ---------------- 预测：线性 vs 自然减速（指数饱和） ---------------- */
-  function fitTau(points, tau, t0) {
+  /* 加权中位数：给近期样本更高权重后，仍要一个稳健的离散度估计 */
+  function weightedMedian(pairs) {
+    if (!pairs || !pairs.length) return 0;
+    var arr = pairs.slice().sort(function (a, b) { return a.v - b.v; });
+    var total = 0;
+    for (var i = 0; i < arr.length; i++) total += arr[i].w;
+    var half = total / 2;
+    var cum = 0;
+    for (var j = 0; j < arr.length; j++) {
+      cum += arr[j].w;
+      if (cum >= half) return arr[j].v;
+    }
+    return arr[arr.length - 1].v;
+  }
+
+  /*
+   * 加权最小二乘。level 有值时把曲线起点钉死在 level（预测从"当前体重"出发）。
+   * weights 为与 points 等长的权重数组，缺省为等权。
+   */
+  function fitTau(points, tau, t0, weights) {
     var n = points.length;
-    var sx = 0, sy = 0, sxx = 0, sxy = 0;
-    for (var i = 0; i < n; i++) {
+    var sw = 0, sx = 0, sy = 0, sxx = 0, sxy = 0;
+    var i;
+    for (i = 0; i < n; i++) {
       var h = points[i].day - t0;
       var x = (tau === Infinity) ? h : tau * (1 - Math.exp(-h / tau));
+      var w = weights ? weights[i] : 1;
       var y = points[i].v;
-      sx += x; sy += y; sxx += x * x; sxy += x * y;
+      sw += w; sx += w * x; sy += w * y; sxx += w * x * x; sxy += w * x * y;
     }
-    var denom = sxx - sx * sx / n;
-    if (Math.abs(denom) < 1e-9) return { tau: tau, l0: mean(points.map(function (p) { return p.v; })), s: 0, sse: Infinity };
-    var s = (sxy - sx * sy / n) / denom;
-    var l0 = sy / n - s * sx / n;
+    if (!(sw > 0)) return { tau: tau, l0: 0, s: 0, sse: Infinity };
+
+    var denom = sxx - sx * sx / sw;
+    if (Math.abs(denom) < 1e-9) return { tau: tau, l0: sy / sw, s: 0, sse: Infinity };
+    var s = (sxy - sx * sy / sw) / denom;
+    var l0 = sy / sw - s * sx / sw;
+
     var sse = 0;
-    for (var j = 0; j < n; j++) {
-      var hj = points[j].day - t0;
+    for (i = 0; i < n; i++) {
+      var hj = points[i].day - t0;
       var xj = (tau === Infinity) ? hj : tau * (1 - Math.exp(-hj / tau));
-      var r = points[j].v - (l0 + s * xj);
-      sse += r * r;
+      var r = points[i].v - (l0 + s * xj);
+      var wj = weights ? weights[i] : 1;
+      sse += wj * r * r;
     }
     return { tau: tau, l0: l0, s: s, sse: sse };
   }
@@ -331,36 +356,80 @@
     return base / Math.sqrt(kk);
   }
 
+  /*
+   * opts:
+   *   level           把拟合起点钉在「当前平滑体重」上，预测曲线一定从这里出发
+   *   model           'auto' | 'linear' | 'decay'
+   *   mode            'cut' | 'bulk' | 'maintain'；auto 模式下 bulk 一律走线性
+   *   weightHalfLife  近期样本加权半衰期（天），0/缺省 = 等权
+   */
   function fitForecast(points, anchorDay, windowDays, opts) {
     opts = opts || {};
     var n = points ? points.length : 0;
     if (n < 8) return null;
-    var linear = fitTau(points, Infinity, anchorDay);
-    var best = linear;
-    var taus = [14, 21, 28, 42, 56, 90];
-    for (var i = 0; i < taus.length; i++) {
-      var f = fitTau(points, taus[i], anchorDay);
-      if (isFinite(f.sse) && f.sse < best.sse) best = f;
+
+    var level = isNum(opts.level) ? opts.level : null;
+    var modelPref = opts.model || 'auto';
+    var mode = opts.mode || 'cut';
+    var halfLife = isNum(opts.weightHalfLife) && opts.weightHalfLife > 0 ? opts.weightHalfLife : 0;
+
+    var weights = null;
+    if (halfLife) {
+      weights = points.map(function (p) {
+        var age = Math.max(0, anchorDay - p.day);
+        return Math.pow(0.5, age / halfLife);
+      });
     }
-    var useDecay = best.tau !== Infinity && isFinite(best.sse) && best.sse < linear.sse * 0.95;
+
+    var linear = fitTau(points, Infinity, anchorDay, weights);
+    var best = linear;
+    if (modelPref !== 'linear') {
+      var taus = [14, 21, 28, 42, 56, 90];
+      for (var i = 0; i < taus.length; i++) {
+        var f = fitTau(points, taus[i], anchorDay, weights);
+        if (isFinite(f.sse) && f.sse < best.sse) best = f;
+      }
+    }
+
+    var useDecay;
+    if (modelPref === 'decay') {
+      useDecay = best.tau !== Infinity && isFinite(best.sse);
+    } else if (modelPref === 'linear') {
+      useDecay = false;
+    } else {
+      useDecay = mode !== 'bulk' && best.tau !== Infinity && isFinite(best.sse) && best.sse < linear.sse * 0.95;
+    }
+
     var model = useDecay ? best : linear;
 
-    var residuals = points.map(function (p) {
-      var h = p.day - anchorDay;
+    // 残差用「原始拟合曲线」算（不参与平移），保证离散度估计不被截距平移污染
+    var residuals = [];
+    for (var k = 0; k < n; k++) {
+      var h = points[k].day - anchorDay;
       var x = (model.tau === Infinity) ? h : model.tau * (1 - Math.exp(-h / model.tau));
-      return p.v - (model.l0 + model.s * x);
-    });
-    var sigma = Math.max(1.4826 * mad(residuals), 0.25);
+      residuals.push({ v: Math.abs(points[k].v - (model.l0 + model.s * x)), w: weights ? weights[k] : 1 });
+    }
+    var sigma = Math.max(1.4826 * weightedMedian(residuals), 0.25);
+
+    // 起点对齐：把整条曲线平移到「当前平滑体重」，斜率不变
+    var startLevel = isNum(level) ? level : model.l0;
+    var shift = startLevel - model.l0;
 
     var span = points[n - 1].day - points[0].day + 1;
     var coverage = Math.min(1, n / Math.max(1, windowDays));
     return {
       model: useDecay ? 'decay' : 'linear',
+      modelPref: modelPref,
       tau: model.tau,
-      l0: model.l0,
+      l0: startLevel,
+      rawL0: model.l0,
+      shift: shift,
+      aligned: isNum(level),
       s: model.s,
       sse: model.sse,
       sigma: sigma,
+      weighted: !!weights,
+      halfLife: halfLife,
       anchorDay: anchorDay,
       windowDays: windowDays,
       n: n,
@@ -677,12 +746,20 @@
       }
     }
 
-    var fc = fitForecast(pts28, anchorDay, trendWindow);
+    var forecastModelPref = settings.forecastModel || 'auto';
+    var fc = fitForecast(pts28, anchorDay, trendWindow, {
+      level: level,
+      model: forecastModelPref,
+      mode: profile.mode || 'cut',
+      weightHalfLife: Math.max(7, Math.round(trendWindow / 2))
+    });
     var forecast = null;
     if (fc) {
       var horizon = Math.max(forecastWeeksCount * 7 + 7, 28);
       forecast = {
         model: fc.model,
+        modelPref: fc.modelPref,
+        weighted: fc.weighted,
         tau: fc.tau,
         l0: fc.l0,
         s: fc.s,

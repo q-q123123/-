@@ -8,7 +8,7 @@
   var Chart = window.WTChart;
   var Sync = window.WTSync || { statusText: function () { return '本机模式'; } };
 
-  var VERSION = '1.6.0';
+  var VERSION = '1.7.0';
 
   var app = {
     repo: null,
@@ -20,7 +20,8 @@
     range: 90,
     scenario: {},
     lastTab: null,
-    pasteOpen: false
+    pasteOpen: false,
+    folds: {}
   };
 
   /* ---------------- 小工具 ---------------- */
@@ -140,25 +141,7 @@
     });
   }
 
-  function renderInstallCard() {
-    if (isNativeShell() || isStandalone()) {
-      return '<section class="card"><div class="section-title">运行方式</div>'
-        + '<div class="muted-text">已作为独立应用运行 ✓ 从桌面图标打开，没有地址栏' + (isNativeShell() ? '，资源打包在本地、断网可用' : '') + '。</div>'
-        + '</section>';
-    }
-    var btn = installPrompt
-      ? '<button class="btn primary" data-act="install-app">安装到手机桌面</button>'
-      : '';
-    return '<section class="card"><div class="section-title">装成手机 App</div>'
-      + '<div class="muted-text">现在是从浏览器打开的，所以顶部有地址栏。按下面做一次，以后从桌面图标进就是全屏 App（可离线）。</div>'
-      + btn
-      + '<ul class="plain">'
-      + '<li><b>Android（Chrome）</b>：右上角 ⋮ → 「安装应用」</li>'
-      + '<li><b>iPhone（Safari）</b>：底部「分享」→「添加到主屏幕」</li>'
-      + '</ul>'
-      + '<div class="hint">装上以后和普通 App 一样有图标、有自己的窗口；数据仍然只存在这台手机上。</div>'
-      + '</section>';
-  }
+
 
   /* ---------------- 版本更新 ---------------- */
   var lastUpdateCheck = 0;
@@ -338,13 +321,15 @@
         + '<b>' + ds.slice(8) + '</b><i>' + Fmt.weekdayCN(ds).slice(1) + '</i></button>';
     }
 
-    var status = entry ? '已记录' : '未记录';
+    var amText = (entry && entry.weightAM !== undefined)
+      ? '晨起 ' + Fmt.kg(entry.weightAM) + ' kg'
+      : '晨起未记录';
 
     return '<section class="datebar">'
       + '<button class="datebar-btn" data-act="prev-day" aria-label="前一天">‹</button>'
       + '<div class="datebar-mid">'
       + '<div class="datebar-date">' + Fmt.dateFullCN(date) + ' ' + Fmt.weekdayCN(date) + '</div>'
-      + '<div class="datebar-sub">' + (isToday ? '今天' : '补记') + ' · ' + status + '</div>'
+      + '<div class="datebar-sub">' + (isToday ? '今天' : '补记') + ' · ' + amText + '</div>'
       + '</div>'
       + '<button class="datebar-btn" data-act="next-day" aria-label="后一天"' + (isToday ? ' disabled' : '') + '>›</button>'
       + '</section>'
@@ -370,12 +355,27 @@
         + (ev.emoji ? ev.emoji + ' ' : '') + esc(ev.name) + '</button>';
     }).join('');
 
+    var nameById = {};
+    events.forEach(function (ev) { nameById[ev.id] = ev; });
+    var summaryChips = selected.map(function (id) {
+      var ev = nameById[id];
+      if (!ev) return '';
+      return '<span class="chip muted">' + (ev.emoji ? ev.emoji + ' ' : '') + esc(ev.name) + '</span>';
+    }).join('');
+
     return '<form id="entryForm" class="card form-card" autocomplete="off" novalidate>'
       + field('weightAM', '晨起空腹体重', 'kg', entry.weightAM, 2, '排空后、同一台秤')
       + field('waist', '腰围', 'cm', entry.waist, 1, '肚脐水平、呼气末')
       + field('weightPost', '力量训练后体重', 'kg', entry.weightPost, 2, '仅作参考，可留空', 'secondary')
-      + '<div class="section-title small">今天有什么特殊情况</div>'
-      + '<div class="chips ev-chips">' + chips + '</div>'
+      + '<div class="ev-block">'
+      + '<button type="button" class="collapse-row" data-act="toggle-events">'
+      + '<span>今天有什么特殊情况</span>'
+      + '<span class="collapse-hint">' + (selected.length ? '已选 ' + selected.length + ' 项' : '可选') + '</span>'
+      + '<i class="chev">›</i>'
+      + '</button>'
+      + (summaryChips ? '<div class="chips ev-summary">' + summaryChips + '</div>' : '')
+      + '<div class="ev-panel"><div class="chips ev-chips">' + chips + '</div></div>'
+      + '</div>'
       + '<label class="field note"><span class="field-label">备注</span>'
       + '<input type="text" name="note" maxlength="100" value="' + esc(entry.note || '') + '" placeholder="可选，例如睡眠 5 小时">'
       + '</label>'
@@ -455,18 +455,18 @@
         + '<div class="section-title">体重趋势</div>'
         + '<div id="weightChart" class="chart-host"></div>'
         + '<div class="legend">'
-        + '<span><i style="background:#94a3b8"></i>原始记录</span>'
-        + '<span><i style="background:#22d3ee"></i>7 天均值</span>'
-        + '<span><i style="background:#7dd3fc"></i>训练后（仅参考）</span>'
-        + '<span><i style="background:#a78bfa"></i>平滑</span>'
-        + '<span><i style="background:#f59e0b"></i>预测</span>'
+        + '<span><i class="mk dot"></i>原始记录</span>'
+        + '<span><i class="mk line" style="background:#22d3ee"></i>7 天均值</span>'
+        + '<span><i class="mk hollow"></i>训练后（仅参考）</span>'
+        + '<span><i class="mk line thin" style="background:#a78bfa"></i>平滑</span>'
+        + '<span><i class="mk dash"></i>预测</span>'
         + '</div></section>';
     }
     if (app.chartMode !== 'weight') {
       html += '<section class="card chart-card">'
         + '<div class="section-title">腰围趋势</div>'
         + '<div id="waistChart" class="chart-host"></div>'
-        + '<div class="legend"><span><i style="background:#94a3b8"></i>实测</span><span><i style="background:#f472b6"></i>趋势线</span></div>'
+        + '<div class="legend"><span><i class="mk dot"></i>实测</span><span><i class="mk line" style="background:#f472b6"></i>趋势线</span></div>'
         + '</section>';
     }
     html += renderWeeks();
@@ -506,7 +506,7 @@
     var postDots = [];
     if (app.repo.state.settings.showPost) {
       postDots = d.postSeries.filter(function (p) { return p.day >= start; })
-        .map(function (p) { return { day: p.day, v: p.v, hollow: true, color: '#7dd3fc', r: 2 }; });
+        .map(function (p) { return { day: p.day, v: p.v, hollow: true, color: '#cbd5e1', r: 2 }; });
     }
 
     var rollLine = d.roll.filter(function (p) { return p.day >= start && p.n >= 3; })
@@ -619,11 +619,15 @@
         + '</tr>';
     }).join('');
 
+    var total = weeks.slice(-10).length;
     return '<section class="card">'
       + '<div class="section-title">每周小结</div>'
+      + '<div class="weeks-wrap">'
       + '<table class="table"><thead><tr>'
       + '<th>周</th><th class="num">周均 kg</th><th class="num">环比</th><th class="num">记录</th><th class="num">腰围</th>'
       + '</tr></thead><tbody>' + rows + '</tbody></table>'
+      + '</div>'
+      + (total > 4 ? '<button class="link" data-act="toggle-weeks" data-count="' + total + '">展开全部 ' + total + ' 周</button>' : '')
       + '<div class="hint">环比 = 本周均值 − 上周均值；括号内为相对当前体重的百分比。</div>'
       + '</section>';
   }
@@ -635,10 +639,58 @@
       + '<button class="btn" data-act="goto-record">去记录</button></section>';
   }
 
+  function foldCard(key, title, digest, body, defaultOpen) {
+    var open = (app.folds && app.folds[key] !== undefined) ? app.folds[key] : !!defaultOpen;
+    return '<details class="card fold" data-fold="' + key + '"' + (open ? ' open' : '') + '>'
+      + '<summary class="fold-head">'
+      + '<span class="section-title">' + title + '</span>'
+      + '<span class="fold-digest">' + (digest || '') + '</span>'
+      + '<i class="chev">›</i>'
+      + '</summary>'
+      + '<div class="fold-body">' + body + '</div>'
+      + '</details>';
+  }
+
+  function modelLabel(d) {
+    if (!d.forecast) return '数据不足';
+    return d.forecast.model === 'decay' ? '含平台期' : '线性';
+  }
+
+  function forecastSettingsBody(d) {
+    var st = app.repo.state.settings;
+    var windows = [14, 28, 56];
+    var models = [['auto', '自动'], ['linear', '线性'], ['decay', '含平台期']];
+    var body = '<div class="field"><span class="field-label">计算窗口</span><div class="seg small">'
+      + windows.map(function (n) {
+        return '<button data-act="trend-window" data-value="' + n + '" class="' + (st.trendWindow === n ? 'on' : '') + '">' + n + ' 天</button>';
+      }).join('')
+      + '</div></div>'
+      + '<div class="field"><span class="field-label">预测模型</span><div class="seg small">'
+      + models.map(function (m) {
+        return '<button data-act="forecast-model" data-value="' + m[0] + '" class="' + (st.forecastModel === m[0] ? 'on' : '') + '">' + m[1] + '</button>';
+      }).join('')
+      + '</div></div>'
+      + '<div class="hint">窗口越短越跟得上最近的变化。窗口内<b>越近的数据权重越高</b>（半衰期 = 窗口的一半），所以换阶段时不用精确标日期，旧阶段会自然淡出。</div>';
+
+    if (d.forecast) {
+      body += '<div class="hint">当前：' + (d.forecast.model === 'decay' ? '含平台期（速度逐渐放缓）' : '线性外推（匀速变化）')
+        + '，起点对齐当前体重 ' + Fmt.kg(d.current.value) + ' kg。</div>';
+    }
+    return body;
+  }
+
   function renderAnalysis() {
     var d = app.dash;
     if (!d.hasData) return emptyState('还没有数据', '记录几天后这里会出现速度、预测和归因');
-    return rateCard(d) + rateTable(d) + forecastCard(d) + targetCard(d) + eventCard(d) + waistCard(d) + qualityCard(d);
+
+    return rateCard(d)
+      + forecastCard(d)
+      + targetCard(d)
+      + foldCard('forecast', '预测设置', '窗口 ' + d.quality.trendWindow + ' 天 · ' + modelLabel(d), forecastSettingsBody(d))
+      + foldCard('rates', '三种口径对照', '14 / ' + d.quality.trendWindow + ' 天', rateTableBody(d))
+      + eventCard(d)
+      + waistCard(d)
+      + qualityCard(d);
   }
 
   function rateCard(d) {
@@ -670,17 +722,14 @@
       + '</tr>';
   }
 
-  function rateTable(d) {
+  function rateTableBody(d) {
     var r = d.rates;
-    return '<section class="card">'
-      + '<div class="section-title">三种口径对照</div>'
-      + '<table class="table"><thead><tr><th>口径</th><th class="num">kg/周</th><th class="num">%/周</th></tr></thead><tbody>'
+    return '<table class="table"><thead><tr><th>口径</th><th class="num">kg/周</th><th class="num">%/周</th></tr></thead><tbody>'
       + rateRow('本周均值 vs 上周', r.d7, false)
       + rateRow('14 天趋势', r.s14, false)
-      + rateRow('28 天趋势（主）', r.s28, true)
+      + rateRow(d.quality.trendWindow + ' 天趋势（主）', r.s28, true)
       + '</tbody></table>'
-      + '<div class="hint">口径冲突时以 28 天稳健斜率为主：它用 Theil–Sen 中位数斜率，抗离群点和漏记。</div>'
-      + '</section>';
+      + '<div class="hint">口径冲突时以主指标为准：它用 Theil–Sen 中位数斜率，抗离群点和漏记。</div>';
   }
 
   function forecastCard(d) {
@@ -766,16 +815,13 @@
 
     var scenarioText = renderScenario();
 
-    return '<section class="card">'
-      + '<div class="section-title">这些事对体重的影响</div>'
-      + rows
-      + '<div class="hint">短期波动主要是水分、糖原和肠道内容物，不代表脂肪变化。样本越多越接近你自己的真实反应。</div>'
-      + '</section>'
-      + '<section class="card">'
-      + '<div class="section-title">如果接下来几天发生这些事</div>'
+    var body = rows
+      + '<div class="hint">短期波动主要是水分、糖原和肠道内容物，不代表脂肪变化。</div>'
+      + '<div class="section-title small">如果接下来几天发生这些事</div>'
       + '<div class="chips ev-chips">' + scenarioChips + '</div>'
-      + '<div id="scenarioBox">' + scenarioText + '</div>'
-      + '</section>';
+      + '<div id="scenarioBox">' + scenarioText + '</div>';
+
+    return foldCard('events', '事件影响与情景', items.length + ' 项', body);
   }
 
   function renderScenario() {
@@ -811,10 +857,7 @@
 
   function waistCard(d) {
     var w = d.waist;
-    if (!w.slope && !w.n) {
-      return '<section class="card"><div class="section-title">腰围</div>'
-        + '<div class="muted-text">还没有腰围记录。腰围比体重更能反映脂肪变化，建议每周至少 2 次。</div></section>';
-    }
+    if (!w.slope && !w.n) return '';
     var slope = w.slope;
     var rows = '';
     if (slope) {
@@ -831,7 +874,8 @@
     if (w.last) rows += '<div class="muted-text">最近一次：' + Fmt.dateCN(Stats.formatDate(w.last.day)) + ' ' + Fmt.cm(w.last.v) + ' cm</div>';
     if (d.consistency) rows += '<div class="consistency ' + d.consistency.tone + '">' + esc(d.consistency.text) + '</div>';
 
-    return '<section class="card"><div class="section-title">腰围</div>' + rows + '</section>';
+    var digest = w.slope ? Fmt.cmSigned(w.slope.kgPerWeek) + ' cm/周' : '记录不足';
+    return foldCard('waist', '腰围', digest, rows);
   }
 
   function qualityCard(d) {
@@ -843,23 +887,24 @@
     if (q.gaps.length) items.push('断档：' + q.gaps.slice(-2).map(function (g) { return Fmt.md(g.from) + '→' + Fmt.md(g.to) + '(' + g.days + ' 天)'; }).join('、'));
     if (d.estimatedDays.length) items.push('由训练后体重折算补齐：' + d.estimatedDays.length + ' 天');
 
-    return '<section class="card"><div class="section-title">数据质量</div>'
-      + '<ul class="plain">' + items.map(function (t) { return '<li>' + esc(t) + '</li>'; }).join('') + '</ul>'
-      + '<div class="hint">漏记不需要补填，算法只在有记录的日子里计算，不会当成 0。</div>'
-      + '</section>';
+    return foldCard('quality', '数据质量', q.coverage28 + '/' + q.trendWindow + ' 天', 
+      '<ul class="plain">' + items.map(function (t) { return '<li>' + esc(t) + '</li>'; }).join('') + '</ul>'
+      + '<div class="hint">漏记不需要补填，算法只在有记录的日子里计算，不会当成 0。</div>');
   }
 
   /* ---------------- 设置页 ---------------- */
+  function modeLabelOf(p) {
+    return p.mode === 'bulk' ? '增肌' : (p.mode === 'maintain' ? '维持' : '减脂');
+  }
+
   function renderSettings() {
     var s = app.repo.state;
     var p = s.profile;
     var st = s.settings;
-    var html = '';
 
-    html += renderInstallCard();
+    var targetDigest = p.targetWeightKg ? '目标 ' + Fmt.kg(p.targetWeightKg) + ' kg' : '未设目标';
 
-    html += '<section class="card"><div class="section-title">个人信息</div>'
-      + settingRow('身高', 'profile.heightCm', 'number', p.heightCm, 'cm')
+    var personal = settingRow('身高', 'profile.heightCm', 'number', p.heightCm, 'cm')
       + settingRow('目标体重（可留空）', 'profile.targetWeightKg', 'number', p.targetWeightKg, 'kg')
       + settingRow('目标速度下限', 'profile.goalRateMinPctPerWeek', 'number', p.goalRateMinPctPerWeek, '%/周')
       + settingRow('目标速度上限', 'profile.goalRateMaxPctPerWeek', 'number', p.goalRateMaxPctPerWeek, '%/周')
@@ -873,26 +918,17 @@
       + '<div class="field"><span class="field-label">每周从</span><div class="seg small">'
       + '<button data-act="weekstart" data-value="1" class="' + (p.weekStartsOn === 1 ? 'on' : '') + '">周一开始</button>'
       + '<button data-act="weekstart" data-value="0" class="' + (p.weekStartsOn === 0 ? 'on' : '') + '">周日开始</button>'
-      + '</div></div>'
-      + '</section>';
+      + '</div></div>';
 
-    html += '<section class="card"><div class="section-title">计算设置</div>'
-      + settingRow('平滑天数', 'settings.smoothingDays', 'number', st.smoothingDays, '天')
+    var calc = settingRow('平滑天数', 'settings.smoothingDays', 'number', st.smoothingDays, '天')
       + settingRow('趋势窗口', 'settings.trendWindow', 'number', st.trendWindow, '天')
       + settingRow('预测周数', 'settings.forecastWeeks', 'number', st.forecastWeeks, '周')
       + toggleRow('缺晨起体重时，用训练后体重估算（不推荐）', 'settings.convertPost', st.convertPost)
       + toggleRow('趋势计算时跳过事件日及其回落期', 'settings.excludeEventDays', st.excludeEventDays)
       + toggleRow('在图上显示原始点', 'settings.showRaw', st.showRaw)
-      + toggleRow('在图上显示训练后体重', 'settings.showPost', st.showPost)
-      + '</section>';
+      + toggleRow('在图上显示训练后体重', 'settings.showPost', st.showPost);
 
-    html += '<section class="card"><div class="section-title">事件与预期影响</div>'
-      + '<div class="hint">先验值可以按你自己的经验改；攒够 5 次记录后，应用会用自己的数据校正。</div>'
-      + eventEditor()
-      + '</section>';
-
-    html += '<section class="card"><div class="section-title">数据</div>'
-      + '<div class="muted-text">' + esc(Sync.statusText(null)) + '</div>'
+    var dataBody = '<div class="muted-text">' + esc(Sync.statusText(null)) + '</div>'
       + '<div class="kv"><span>当前版本</span><b>v' + VERSION + '</b>'
       + '<em><button class="link" data-act="check-update">检查更新</button></em></div>'
       + '<div class="btn-row">'
@@ -906,22 +942,20 @@
       + '</div>'
       + '<input type="file" id="importFile" accept=".json,.csv,.txt,application/json,text/csv,text/plain" hidden>'
       + (app.pasteOpen ? pastePanel() : '')
-      + '<div class="hint">可以直接把手机备忘录里「<b>2026年10月30日：空78.75kg 77.8cm 81.45kg</b>」这种整段内容粘进来。'
-      + 'CSV 至少要有「日期」列，加上体重或腰围中的任意一列；表头能识别 日期 / 晨起 / 体重 / 训练后 / 腰围 / 事件 / 备注，列顺序随意。</div>'
-      + '<div class="hint">数据只保存在这台设备的浏览器里。换手机、清缓存前请先导出 JSON。</div>'
-      + '</section>';
+      + '<div class="hint">可以直接把手机备忘录里「<b>2026年10月30日：空78.75kg 77.8cm 81.45kg</b>」这种整段内容粘进来；CSV 表头能识别 日期 / 晨起 / 体重 / 训练后 / 腰围 / 事件 / 备注。</div>'
+      + '<div class="hint">数据只保存在这台设备的浏览器里。换手机、清缓存前请先导出 JSON。</div>';
 
-    html += '<section class="card"><div class="section-title">关于计算</div>'
-      + '<details><summary>周平均速度是怎么算的</summary><div class="prose">'
+    var about = '<details><summary>周平均速度是怎么算的</summary><div class="prose">'
       + '<p>单日体重受水分、糖原和肠道内容物影响，日间波动常有 0.5–1 kg，所以不看单日数字。</p>'
       + '<p><b>7 天滚动均值</b>：每天取最近 7 天已记录值的平均，缺失日不补 0。它消掉了周内节律，比如周末聚餐导致的周一大涨。</p>'
-      + '<p><b>28 天稳健斜率</b>：用 Theil–Sen 估计（所有点对斜率的中位数），对离群点和漏记都不敏感。再乘 7 得到 kg/周，除以当前平滑体重得到 %/周。</p>'
+      + '<p><b>稳健斜率</b>：用 Theil–Sen 估计（所有点对斜率的中位数），对离群点和漏记都不敏感。再乘 7 得到 kg/周，除以当前平滑体重得到 %/周。</p>'
       + '<p><b>不确定性</b>：对日期做 400 次自助重抽样得到 80% 区间。区间越宽，说明数据越不足以支撑结论。</p>'
       + '</div></details>'
       + '<details><summary>预测是怎么来的</summary><div class="prose">'
-      + '<p>默认拟合「指数饱和」趋势：变化速度随时间自然放缓，最后趋于平台，这比直线外推更接近真实减重。</p>'
-      + '<p>只有当非线性模型比线性模型的残差低 5% 以上时才采用，否则直接用直线，避免过度拟合。</p>'
-      + '<p>预测区间由残差的稳健标准差决定，天数越远越宽；预测的是「那一周的平均体重」，比预测某一天更稳。</p>'
+      + '<p>在「计算窗口」内拟合趋势（默认 28 天），<b>越近的数据权重越高</b>（半衰期 = 窗口的一半），所以换阶段时旧阶段会自然淡出。</p>'
+      + '<p>可以选「线性」（匀速变化）、「含平台期」（速度逐渐放缓，适合减脂后期）或「自动」。<b>增肌模式下自动一律用线性</b>，因为上调热量的过程是加速的，饱和模型方向相反。</p>'
+      + '<p>预测曲线<b>从当前体重出发</b>（起点对齐近 7 天均值），所以第一周的预测不会和卡片上的数字对不上。</p>'
+      + '<p>预测区间由残差的稳健离散度决定，天数越远越宽；预测的是「那一周的平均体重」，比预测某一天更稳。</p>'
       + '</div></details>'
       + '<details><summary>聚餐、有氧、换计划影响怎么算</summary><div class="prose">'
       + '<p>每个事件有一个先验偏移量和回落天数（比如外出聚餐 +0.7 kg、2–3 天回落）。</p>'
@@ -931,10 +965,14 @@
       + '<details><summary>这些数字不能做什么</summary><div class="prose">'
       + '<p>两位小数是精度，不是准确度：0.02 kg 的变化没有意义。</p>'
       + '<p>本工具只做计算和提示，不构成医疗或营养建议。安全减脂速度参考 0.25–1.0 %体重/周。</p>'
-      + '</div></details>'
-      + '</section>';
+      + '</div></details>';
 
-    return html;
+    return foldCard('personal', '个人信息', modeLabelOf(p) + ' · ' + targetDigest, personal)
+      + foldCard('calc', '计算设置', '窗口 ' + st.trendWindow + ' 天', calc)
+      + foldCard('events-edit', '事件与预期影响', app.repo.allEvents().length + ' 项',
+        '<div class="hint">先验值可以按你自己的经验改；攒够 5 次记录后，应用会用自己的数据校正。</div>' + eventEditor())
+      + foldCard('data', '数据与备份', 'v' + VERSION, dataBody)
+      + foldCard('about', '关于计算', '', about);
   }
 
   function pastePanel() {
@@ -1063,6 +1101,14 @@
 
     var view = $('#view');
     if (view) {
+      // <details> 的展开状态要记住，否则重新渲染会全部收起
+      view.addEventListener('toggle', function (e) {
+        var t = e.target;
+        if (t && t.getAttribute && t.getAttribute('data-fold')) {
+          app.folds[t.getAttribute('data-fold')] = !!t.open;
+        }
+      }, true);
+
       view.addEventListener('keydown', function (e) {
         if (e.key === 'Enter' && e.target && e.target.name && e.target.name !== 'note') {
           e.preventDefault();
@@ -1101,6 +1147,25 @@
         el.classList.toggle('on');
         break;
       }
+      case 'toggle-events': {
+        var block = el.closest('.ev-block');
+        if (block) block.classList.toggle('open');
+        break;
+      }
+      case 'toggle-weeks': {
+        var card = el.closest('.card');
+        var wrap = card ? card.querySelector('.weeks-wrap') : null;
+        if (!wrap) break;
+        var opened = wrap.classList.toggle('open');
+        el.textContent = opened ? '收起' : ('展开全部 ' + el.getAttribute('data-count') + ' 周');
+        break;
+      }
+      case 'trend-window':
+        app.repo.updateSettings({ trendWindow: Number(el.getAttribute('data-value')) });
+        break;
+      case 'forecast-model':
+        app.repo.updateSettings({ forecastModel: el.getAttribute('data-value') });
+        break;
       case 'chartmode':
         app.chartMode = el.getAttribute('data-value');
         render();
