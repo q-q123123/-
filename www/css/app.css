@@ -229,23 +229,27 @@ button.chip { cursor: pointer; font-family: inherit; }
   border: 1px solid var(--line);
   background: var(--card);
   border-radius: 12px;
-  padding: 7px 0;
+  padding: 6px 2px 7px;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 1px;
+  gap: 2px;
   cursor: pointer;
   color: var(--text);
   font-family: inherit;
 }
+.dd-top { display: flex; align-items: baseline; justify-content: center; gap: 2px; line-height: 1.1; }
 .daydot b { font-size: 14px; font-variant-numeric: tabular-nums; }
-.daydot i { font-size: 10px; color: var(--dim); font-style: normal; }
-.daydot.empty b { color: var(--dim); }
-.daydot.empty::after {
-  content: '';
-  width: 4px; height: 4px; border-radius: 50%;
-  background: var(--bad); opacity: .7;
+.daydot i { font-size: 9px; color: var(--dim); font-style: normal; }
+.dd-w {
+  font-size: 9.5px;
+  line-height: 1.2;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -.2px;
 }
+.daydot.empty .dd-w { color: var(--dim); }
+.daydot.empty b { color: var(--dim); }
 .daydot.on { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, transparent); }
 .daydot.on b { color: var(--accent); }
 

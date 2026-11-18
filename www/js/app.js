@@ -8,7 +8,7 @@
   var Chart = window.WTChart;
   var Sync = window.WTSync || { statusText: function () { return '本机模式'; } };
 
-  var VERSION = '1.7.0';
+  var VERSION = '1.7.1';
 
   var app = {
     repo: null,
@@ -316,9 +316,13 @@
     for (var i = 6; i >= 0; i--) {
       var ds = Stats.formatDate(d.todayDay - i);
       var ent = app.repo.getEntry(ds);
-      var cls = 'daydot' + (ds === date ? ' on' : '') + (!ent ? ' empty' : '');
-      strip += '<button class="' + cls + '" data-act="pick-day" data-date="' + ds + '" aria-label="' + ds + '">'
-        + '<b>' + ds.slice(8) + '</b><i>' + Fmt.weekdayCN(ds).slice(1) + '</i></button>';
+      var hasAm = !!(ent && ent.weightAM !== undefined);
+      var cls = 'daydot' + (ds === date ? ' on' : '') + (hasAm ? '' : ' empty');
+      strip += '<button class="' + cls + '" data-act="pick-day" data-date="' + ds + '"'
+        + ' aria-label="' + ds + (hasAm ? ' ' + Fmt.kg(ent.weightAM) + 'kg' : '') + '">'
+        + '<span class="dd-top"><b>' + ds.slice(8) + '</b><i>' + Fmt.weekdayCN(ds).slice(1) + '</i></span>'
+        + '<span class="dd-w">' + (hasAm ? Fmt.kg(ent.weightAM) : '—') + '</span>'
+        + '</button>';
     }
 
     var amText = (entry && entry.weightAM !== undefined)
