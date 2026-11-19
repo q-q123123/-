@@ -759,3 +759,24 @@ button.datebar-mid:active { background: var(--card-2); }
   letter-spacing: -.2px;
 }
 .cal-day.on .cal-w { color: var(--accent-ink); }
+/* ---------- 日期条尺寸修正：显式定高，避免被拉伸 ---------- */
+.daystrip {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  height: 50px;
+  padding-bottom: 2px;
+  overflow-y: hidden;
+}
+.daystrip .daydot {
+  flex: 0 0 calc((100% - 36px) / 7);
+  min-width: 0;
+  height: 46px;
+  box-sizing: border-box;
+  justify-content: center;
+  padding: 4px 2px;
+}
+
+/* ---------- 日历底部：回到今天 ---------- */
+.cal-foot { margin-top: 10px; display: flex; justify-content: center; }
+.cal-foot .btn { width: 100%; }

@@ -8,7 +8,7 @@
   var Chart = window.WTChart;
   var Sync = window.WTSync || { statusText: function () { return '本机模式'; } };
 
-  var VERSION = '1.11.0';
+  var VERSION = '1.11.1';
 
   var app = {
     repo: null,
@@ -403,7 +403,8 @@
         : '<button class="' + cls + '" data-act="pick-day" data-date="' + ds + '">' + inner + '</button>';
     }
 
-    return head + '<div class="cal-grid">' + cells + '</div>';
+    return head + '<div class="cal-grid">' + cells + '</div>'
+      + '<div class="cal-foot"><button class="btn small" data-act="cal-today">回到今天</button></div>';
   }
 
   function field(name, label, unit, value, digits, hint, cls) {
@@ -1300,6 +1301,11 @@
         }
         break;
       }
+      case 'cal-today':
+        app.date = app.dash.today;
+        app.calOpen = false;
+        render();
+        break;
       case 'cal-prev':
       case 'cal-next': {
         var pnl = $('#calPanel');
