@@ -4,7 +4,7 @@
  *   - 静态资源：先给缓存、后台更新 —— 离线秒开，下一次打开拿到新版
  *   - 新版本不会偷偷激活：会等页面提示「有新版本」再切换，避免版本切换导致的数据错乱观感
  */
-var VERSION = 'v5-mwm52vs9';
+var VERSION = 'v5-mwn1i46f';
 var CACHE = 'wt-' + VERSION;
 
 var ASSETS = [

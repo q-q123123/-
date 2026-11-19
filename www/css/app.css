@@ -707,3 +707,21 @@ button.datebar-mid:active { background: var(--card-2); }
   background: var(--accent);
 }
 .cal-day.on .cal-dot { background: var(--accent-ink); }
+/* ---------- 体脂对照表 ---------- */
+.sub-details {
+  border-top: 1px solid var(--line);
+  padding-top: 8px;
+  margin-top: 2px;
+}
+.sub-details > summary {
+  font-size: 13px;
+  color: var(--accent);
+  cursor: pointer;
+  list-style: none;
+  padding: 2px 0;
+}
+.sub-details > summary::-webkit-details-marker { display: none; }
+.sub-details > summary::marker { content: ''; }
+.bf-table .num { font-variant-numeric: tabular-nums; }
+.bf-table .cur td { background: var(--card-2); font-weight: 600; }
+.bf-table .dim { color: var(--dim); font-size: 11px; margin-left: 4px; font-weight: 400; }

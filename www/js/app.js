@@ -8,7 +8,7 @@
   var Chart = window.WTChart;
   var Sync = window.WTSync || { statusText: function () { return '本机模式'; } };
 
-  var VERSION = '1.9.0';
+  var VERSION = '1.10.0';
 
   var app = {
     repo: null,
@@ -908,6 +908,27 @@
       + '<tbody>' + rows + '</tbody></table>';
   }
 
+  function bfTableBody(b) {
+    var nearest = (b && b.available) ? Math.round(Math.round(b.whtr * 100) / 2) * 2 : -1;
+    var rows = '';
+    for (var g = 34; g <= 60; g += 2) {
+      var whr = g / 100;
+      var m = 64 - 20 / whr;
+      var f = 76 - 20 / whr;
+      var mCat = Stats.bodyFatCategory(m, 'male');
+      var fCat = Stats.bodyFatCategory(f, 'female');
+      rows += '<tr' + (g === nearest ? ' class="cur"' : '') + '>'
+        + '<td>' + whr.toFixed(2) + '</td>'
+        + '<td class="num">' + m.toFixed(1) + '%<span class="dim">' + mCat.label + '</span></td>'
+        + '<td class="num">' + f.toFixed(1) + '%<span class="dim">' + fCat.label + '</span></td>'
+        + '</tr>';
+    }
+    return '<div class="hint">体脂率由 RFM 换算；档位按 ACE 分级，描述的是人群区间，不是对你个人的判断。</div>'
+      + '<table class="table small bf-table"><thead><tr>'
+      + '<th>腰高比</th><th class="num">男性</th><th class="num">女性</th>'
+      + '</tr></thead><tbody>' + rows + '</tbody></table>';
+  }
+
   function bodyCompCard(d) {
     var b = d.bodyComp;
     if (!b) return '';
@@ -924,9 +945,17 @@
     var levelText = b.level === 'low' ? '偏低' : (b.level === 'healthy' ? '健康区间' : '风险增加');
     var tone = b.level === 'healthy' ? 'good' : (b.level === 'low' ? 'muted' : 'warn');
 
+    var cat = b.category;
+    var catTone = !cat ? 'muted'
+      : cat.key === 'healthy' ? 'good'
+        : cat.key === 'high' ? 'warn'
+          : cat.key === 'verylow' ? 'muted' : 'info';
+
     var body = '<div class="kv"><span>腰高比</span><b>' + b.whtr.toFixed(2) + '</b>' + chip(tone, levelText) + '</div>'
       + '<div class="hint">0.40–0.49 健康，≥0.50 心血管代谢风险增加（NICE 2025 推荐腰高比作为中心性肥胖评估工具）。</div>'
       + '<div class="rate-big one"><div class="rate-cell"><b>≈ ' + b.bf.toFixed(1) + '%</b><i>体脂率参考值</i></div></div>'
+      + (cat ? '<div class="chips tight">' + chip(catTone, cat.label) + '</div>'
+        + '<div class="muted-text">' + esc(cat.desc) + '</div>' : '')
       + '<div class="muted-text">误差约 ±' + b.band + ' 个百分点。这是人群公式（RFM），'
       + '力量训练人群通常被高估 2–4 个点，真实值可能更低。</div>';
 
@@ -940,6 +969,9 @@
     if (b.outOfRange) {
       body += '<div class="hint">腰高比超出公式的可靠范围（0.30–0.70），结果仅供参考。</div>';
     }
+
+    body += '<details class="sub-details"><summary>查看完整对照表</summary>'
+      + bfTableBody(b) + '</details>';
 
     return foldCard('bodycomp', '腰高比 / 体脂率', digest, body);
   }

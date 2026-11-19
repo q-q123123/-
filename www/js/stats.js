@@ -690,6 +690,35 @@
     return { key: 'ok', label: '在计划内', tone: 'good' };
   }
 
+  /* ---------------- 体脂率分档（ACE 分级；描述为人群区间，不是个人诊断） ---------------- */
+  var BF_BANDS = {
+    male: [
+      { max: 6, key: 'verylow', label: '极低', desc: '接近必需脂肪下限，长期维持可能影响激素与免疫' },
+      { max: 14, key: 'athlete', label: '运动员', desc: '肌肉线条清晰，常见于长期系统训练者' },
+      { max: 18, key: 'fit', label: '健身', desc: '体形紧实，腰腹平坦' },
+      { max: 25, key: 'healthy', label: '健康', desc: '体型匀称，属于常见健康区间' },
+      { max: Infinity, key: 'high', label: '偏高', desc: '腰腹脂肪偏多，代谢风险上升' }
+    ],
+    female: [
+      { max: 14, key: 'verylow', label: '极低', desc: '接近必需脂肪下限，长期维持可能影响激素与免疫' },
+      { max: 21, key: 'athlete', label: '运动员', desc: '肌肉线条清晰，常见于长期系统训练者' },
+      { max: 25, key: 'fit', label: '健身', desc: '体形紧实，腰腹平坦' },
+      { max: 32, key: 'healthy', label: '健康', desc: '体型匀称，属于常见健康区间' },
+      { max: Infinity, key: 'high', label: '偏高', desc: '腰腹脂肪偏多，代谢风险上升' }
+    ]
+  };
+
+  function bodyFatCategory(bf, sex) {
+    var bands = BF_BANDS[sex === 'female' ? 'female' : 'male'];
+    if (!isNum(bf)) return null;
+    for (var i = 0; i < bands.length; i++) {
+      if (bf < bands[i].max) {
+        return { key: bands[i].key, label: bands[i].label, desc: bands[i].desc, min: i === 0 ? null : bands[i - 1].max, max: bands[i].max };
+      }
+    }
+    return null;
+  }
+
   /* ---------------- 汇总 ---------------- */
   function buildDashboard(db, now, eventDefs) {
     db = db || {};
@@ -858,6 +887,7 @@
       bodyComp.bf = bf;
       bodyComp.band = bf < 15 ? 6 : 5;
       bodyComp.level = whtr < 0.4 ? 'low' : (whtr < 0.5 ? 'healthy' : 'high');
+      bodyComp.category = bodyFatCategory(bf, sex);
       bodyComp.waistUsed = waistUsed;
       bodyComp.waistN = recentWaist.length;
       bodyComp.outOfRange = whtr < 0.3 || whtr > 0.7;
@@ -988,6 +1018,7 @@
     findGaps: findGaps,
     judgeRate: judgeRate,
     goalRange: goalRange,
+    bodyFatCategory: bodyFatCategory,
     buildDashboard: buildDashboard
   };
 });
