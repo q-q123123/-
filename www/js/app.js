@@ -8,7 +8,7 @@
   var Chart = window.WTChart;
   var Sync = window.WTSync || { statusText: function () { return '本机模式'; } };
 
-  var VERSION = '1.10.0';
+  var VERSION = '1.11.0';
 
   var app = {
     repo: null,
@@ -249,7 +249,17 @@
     afterRender();
   }
 
+  function centerStrip() {
+    var strip = $('#dayStrip');
+    if (!strip || !strip.querySelector) return;
+    var cell = strip.querySelector('.daydot.on');
+    if (!cell || !cell.offsetWidth) return;
+    var target = cell.offsetLeft - (strip.clientWidth - cell.offsetWidth) / 2;
+    strip.scrollLeft = Math.max(0, target);
+  }
+
   function afterRender() {
+    if (app.tab === 'record') centerStrip();
     if (app.tab === 'trend') {
       var host = $('#weightChart');
       if (host) Chart.render(host, buildWeightSpec());
@@ -313,9 +323,16 @@
     var isToday = date === d.today;
     var entry = app.repo.getEntry(date);
 
+    var selectedDay = Stats.parseDate(date);
+    var firstDay = d.series.length ? d.series[0].day : d.todayDay - 6;
+    var startDay = Math.min(firstDay, selectedDay) - 1;
+    var endDay = d.todayDay;
+    if (endDay - startDay > 400) startDay = endDay - 400;
+    if (endDay < startDay) endDay = startDay;
+
     var strip = '';
-    for (var i = 6; i >= 0; i--) {
-      var ds = Stats.formatDate(d.todayDay - i);
+    for (var day = startDay; day <= endDay; day++) {
+      var ds = Stats.formatDate(day);
       var ent = app.repo.getEntry(ds);
       var hasAm = !!(ent && ent.weightAM !== undefined);
       var cls = 'daydot' + (ds === date ? ' on' : '') + (hasAm ? '' : ' empty');
@@ -339,7 +356,7 @@
       + '</button>'
       + '<button class="datebar-btn" data-act="next-day" aria-label="后一天"' + (isToday ? ' disabled' : '') + '>›</button>'
       + '</section>'
-      + '<div class="daystrip">' + strip + '</div>'
+      + '<div class="daystrip-wrap"><div class="daystrip" id="dayStrip">' + strip + '</div></div>'
       + '<div class="cal-panel" id="calPanel"></div>';
   }
 
@@ -373,13 +390,14 @@
       var idx = firstIdx + day - 1;
       var ds = Stats.formatDate(idx);
       var ent = app.repo.getEntry(ds);
-      var has = !!(ent && (ent.weightAM !== undefined || ent.waist !== undefined));
+      var hasW = !!(ent && ent.weightAM !== undefined);
       var cls = 'cal-day'
-        + (has ? ' has' : '')
+        + (hasW ? ' has' : '')
         + (ds === app.date ? ' on' : '')
         + (idx === d.todayDay ? ' today' : '')
         + (idx > d.todayDay ? ' future' : '');
-      var inner = '<b>' + day + '</b>' + (has ? '<i class="cal-dot"></i>' : '');
+      var inner = '<b>' + day + '</b><i class="cal-w">'
+        + (hasW ? Fmt.kg(ent.weightAM) : '—') + '</i>';
       cells += idx > d.todayDay
         ? '<span class="' + cls + '">' + inner + '</span>'
         : '<button class="' + cls + '" data-act="pick-day" data-date="' + ds + '">' + inner + '</button>';

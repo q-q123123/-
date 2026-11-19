@@ -725,3 +725,37 @@ button.datebar-mid:active { background: var(--card-2); }
 .bf-table .num { font-variant-numeric: tabular-nums; }
 .bf-table .cur td { background: var(--card-2); font-weight: 600; }
 .bf-table .dim { color: var(--dim); font-size: 11px; margin-left: 4px; font-weight: 400; }
+/* ---------- 可横向滑动的日期条 ---------- */
+.daystrip-wrap { overflow: hidden; }
+.daystrip {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  position: relative;
+  padding-bottom: 2px;
+  overscroll-behavior-x: contain;
+}
+.daystrip::-webkit-scrollbar { display: none; }
+.daystrip .daydot { flex: 0 0 calc((100% - 36px) / 7); min-width: 0; }
+
+/* ---------- 日历格子：日号 + 体重 ---------- */
+.cal-day {
+  height: 46px;
+  aspect-ratio: auto;
+  flex-direction: column;
+  gap: 1px;
+  line-height: 1.15;
+}
+.cal-day b { font-size: 12px; font-weight: 600; }
+.cal-day.has { background: transparent; }
+.cal-w {
+  font-style: normal;
+  font-size: 8.5px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -.2px;
+}
+.cal-day.on .cal-w { color: var(--accent-ink); }
