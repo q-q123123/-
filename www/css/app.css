@@ -780,3 +780,22 @@ button.datebar-mid:active { background: var(--card-2); }
 /* ---------- 日历底部：回到今天 ---------- */
 .cal-foot { margin-top: 10px; display: flex; justify-content: center; }
 .cal-foot .btn { width: 100%; }
+/* ---------- 日历状态标记：选中=青框，今天=橙框+「今」 ---------- */
+.cal-day.today { border: 1px solid #f59e0b; }
+.cal-day.on {
+  background: transparent;
+  color: var(--text);
+  font-weight: 600;
+  border: 2px solid var(--accent);
+}
+.cal-day.on .cal-w { color: var(--muted); }
+.cal-today-mark {
+  position: absolute;
+  top: 1px;
+  right: 3px;
+  font-style: normal;
+  font-size: 8px;
+  font-weight: 700;
+  line-height: 1;
+  color: #f59e0b;
+}

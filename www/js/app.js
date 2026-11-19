@@ -8,7 +8,7 @@
   var Chart = window.WTChart;
   var Sync = window.WTSync || { statusText: function () { return '本机模式'; } };
 
-  var VERSION = '1.11.1';
+  var VERSION = '1.11.2';
 
   var app = {
     repo: null,
@@ -397,7 +397,8 @@
         + (idx === d.todayDay ? ' today' : '')
         + (idx > d.todayDay ? ' future' : '');
       var inner = '<b>' + day + '</b><i class="cal-w">'
-        + (hasW ? Fmt.kg(ent.weightAM) : '—') + '</i>';
+        + (hasW ? Fmt.kg(ent.weightAM) : '—') + '</i>'
+        + (idx === d.todayDay ? '<i class="cal-today-mark">今</i>' : '');
       cells += idx > d.todayDay
         ? '<span class="' + cls + '">' + inner + '</span>'
         : '<button class="' + cls + '" data-act="pick-day" data-date="' + ds + '">' + inner + '</button>';
