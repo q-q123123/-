@@ -8,7 +8,7 @@
   var Chart = window.WTChart;
   var Sync = window.WTSync || { statusText: function () { return '本机模式'; } };
 
-  var VERSION = '1.7.1';
+  var VERSION = '1.9.0';
 
   var app = {
     repo: null,
@@ -21,7 +21,8 @@
     scenario: {},
     lastTab: null,
     pasteOpen: false,
-    folds: {}
+    folds: {},
+    calMonth: null
   };
 
   /* ---------------- 小工具 ---------------- */
@@ -331,13 +332,60 @@
 
     return '<section class="datebar">'
       + '<button class="datebar-btn" data-act="prev-day" aria-label="前一天">‹</button>'
-      + '<div class="datebar-mid">'
-      + '<div class="datebar-date">' + Fmt.dateFullCN(date) + ' ' + Fmt.weekdayCN(date) + '</div>'
-      + '<div class="datebar-sub">' + (isToday ? '今天' : '补记') + ' · ' + amText + '</div>'
-      + '</div>'
+      + '<button class="datebar-mid" data-act="cal-toggle" aria-label="打开日历">'
+      + '<span class="datebar-date">' + Fmt.dateFullCN(date) + ' ' + Fmt.weekdayCN(date)
+      + ' <i class="cal-caret">▾</i></span>'
+      + '<span class="datebar-sub">' + (isToday ? '今天' : '补记') + ' · ' + amText + '</span>'
+      + '</button>'
       + '<button class="datebar-btn" data-act="next-day" aria-label="后一天"' + (isToday ? ' disabled' : '') + '>›</button>'
       + '</section>'
-      + '<div class="daystrip">' + strip + '</div>';
+      + '<div class="daystrip">' + strip + '</div>'
+      + '<div class="cal-panel" id="calPanel"></div>';
+  }
+
+  /* ---------------- 日历 ---------------- */
+  function pad2(n) { return n < 10 ? '0' + n : String(n); }
+
+  function calendarHtml(year, month) {
+    var profile = app.repo.state.profile || {};
+    var startsOn = profile.weekStartsOn === 0 ? 0 : 1;
+    var d = app.dash;
+    var firstIdx = Stats.parseDate(year + '-' + pad2(month) + '-01');
+    if (!isFinite(firstIdx)) return '';
+    var daysInMonth = new Date(Date.UTC(year, month, 0)).getUTCDate();
+    var lead = ((Stats.dayOfWeek(firstIdx) - startsOn) + 7) % 7;
+
+    var weekLabels = startsOn === 0
+      ? ['日', '一', '二', '三', '四', '五', '六']
+      : ['一', '二', '三', '四', '五', '六', '日'];
+
+    var head = '<div class="cal-head">'
+      + '<button data-act="cal-prev" aria-label="上个月">‹</button>'
+      + '<span class="cal-title">' + year + '年' + month + '月</span>'
+      + '<button data-act="cal-next" aria-label="下个月">›</button>'
+      + '</div>'
+      + '<div class="cal-week">' + weekLabels.map(function (w) { return '<span>' + w + '</span>'; }).join('') + '</div>';
+
+    var cells = '';
+    for (var i = 0; i < lead; i++) cells += '<span class="cal-day blank"></span>';
+
+    for (var day = 1; day <= daysInMonth; day++) {
+      var idx = firstIdx + day - 1;
+      var ds = Stats.formatDate(idx);
+      var ent = app.repo.getEntry(ds);
+      var has = !!(ent && (ent.weightAM !== undefined || ent.waist !== undefined));
+      var cls = 'cal-day'
+        + (has ? ' has' : '')
+        + (ds === app.date ? ' on' : '')
+        + (idx === d.todayDay ? ' today' : '')
+        + (idx > d.todayDay ? ' future' : '');
+      var inner = '<b>' + day + '</b>' + (has ? '<i class="cal-dot"></i>' : '');
+      cells += idx > d.todayDay
+        ? '<span class="' + cls + '">' + inner + '</span>'
+        : '<button class="' + cls + '" data-act="pick-day" data-date="' + ds + '">' + inner + '</button>';
+    }
+
+    return head + '<div class="cal-grid">' + cells + '</div>';
   }
 
   function field(name, label, unit, value, digits, hint, cls) {
@@ -690,6 +738,7 @@
     return rateCard(d)
       + forecastCard(d)
       + targetCard(d)
+      + bodyCompCard(d)
       + foldCard('forecast', '预测设置', '窗口 ' + d.quality.trendWindow + ' 天 · ' + modelLabel(d), forecastSettingsBody(d))
       + foldCard('rates', '三种口径对照', '14 / ' + d.quality.trendWindow + ' 天', rateTableBody(d))
       + eventCard(d)
@@ -859,6 +908,42 @@
       + '<tbody>' + rows + '</tbody></table>';
   }
 
+  function bodyCompCard(d) {
+    var b = d.bodyComp;
+    if (!b) return '';
+
+    if (!b.available) {
+      var msg = b.reason === 'no-sex' ? '在设置里选一下性别，就能按腰高比估算体脂率。'
+        : (b.reason === 'no-height' ? '在设置里填一下身高，就能按腰高比估算体脂率。'
+          : '还没有腰围记录。');
+      return foldCard('bodycomp', '腰高比 / 体脂率', '未启用',
+        '<div class="muted-text">' + msg + '</div>');
+    }
+
+    var digest = b.whtr.toFixed(2) + ' · ≈' + Math.round(b.bf) + '%';
+    var levelText = b.level === 'low' ? '偏低' : (b.level === 'healthy' ? '健康区间' : '风险增加');
+    var tone = b.level === 'healthy' ? 'good' : (b.level === 'low' ? 'muted' : 'warn');
+
+    var body = '<div class="kv"><span>腰高比</span><b>' + b.whtr.toFixed(2) + '</b>' + chip(tone, levelText) + '</div>'
+      + '<div class="hint">0.40–0.49 健康，≥0.50 心血管代谢风险增加（NICE 2025 推荐腰高比作为中心性肥胖评估工具）。</div>'
+      + '<div class="rate-big one"><div class="rate-cell"><b>≈ ' + b.bf.toFixed(1) + '%</b><i>体脂率参考值</i></div></div>'
+      + '<div class="muted-text">误差约 ±' + b.band + ' 个百分点。这是人群公式（RFM），'
+      + '力量训练人群通常被高估 2–4 个点，真实值可能更低。</div>';
+
+    if (b.prev) {
+      body += '<div class="muted-text">' + b.prev.days + ' 天前：腰高比 ' + b.prev.whtr.toFixed(2)
+        + ' / ≈' + b.prev.bf.toFixed(1) + '%</div>';
+    }
+    if (b.staleDays !== null) {
+      body += '<div class="hint">最近一条腰围是 ' + b.staleDays + ' 天前，用的是那一次的值。</div>';
+    }
+    if (b.outOfRange) {
+      body += '<div class="hint">腰高比超出公式的可靠范围（0.30–0.70），结果仅供参考。</div>';
+    }
+
+    return foldCard('bodycomp', '腰高比 / 体脂率', digest, body);
+  }
+
   function waistCard(d) {
     var w = d.waist;
     if (!w.slope && !w.n) return '';
@@ -908,7 +993,11 @@
 
     var targetDigest = p.targetWeightKg ? '目标 ' + Fmt.kg(p.targetWeightKg) + ' kg' : '未设目标';
 
-    var personal = settingRow('身高', 'profile.heightCm', 'number', p.heightCm, 'cm')
+    var personal = '<div class="field"><span class="field-label">性别</span><div class="seg small">'
+      + '<button data-act="sex" data-value="male" class="' + (p.sex === 'male' ? 'on' : '') + '">男</button>'
+      + '<button data-act="sex" data-value="female" class="' + (p.sex === 'female' ? 'on' : '') + '">女</button>'
+      + '</div></div>'
+      + settingRow('身高', 'profile.heightCm', 'number', p.heightCm, 'cm')
       + settingRow('目标体重（可留空）', 'profile.targetWeightKg', 'number', p.targetWeightKg, 'kg')
       + settingRow('目标速度下限', 'profile.goalRateMinPctPerWeek', 'number', p.goalRateMinPctPerWeek, '%/周')
       + settingRow('目标速度上限', 'profile.goalRateMaxPctPerWeek', 'number', p.goalRateMaxPctPerWeek, '%/周')
@@ -1142,8 +1231,37 @@
       }
       case 'pick-day':
         app.date = el.getAttribute('data-date');
+        app.calOpen = false;
         render();
         break;
+      case 'cal-toggle': {
+        var panel = $('#calPanel');
+        if (!panel) break;
+        var opening = panel.className.indexOf('open') < 0;
+        if (opening) {
+          var di = Stats.parseDate(app.date);
+          var dt = new Date(di * 86400000);
+          app.calMonth = { y: dt.getUTCFullYear(), m: dt.getUTCMonth() + 1 };
+          panel.innerHTML = calendarHtml(app.calMonth.y, app.calMonth.m);
+        }
+        panel.className = 'cal-panel' + (opening ? ' open' : '');
+        if (opening && panel.scrollIntoView) {
+          try { panel.scrollIntoView({ block: 'nearest' }); } catch (e) { /* ignore */ }
+        }
+        break;
+      }
+      case 'cal-prev':
+      case 'cal-next': {
+        var pnl = $('#calPanel');
+        if (!pnl) break;
+        var cur = app.calMonth || { y: new Date().getFullYear(), m: new Date().getMonth() + 1 };
+        var total = cur.y * 12 + (cur.m - 1) + (act === 'cal-prev' ? -1 : 1);
+        var yy = Math.floor(total / 12);
+        var mm = (total % 12 + 12) % 12 + 1;
+        app.calMonth = { y: yy, m: mm };
+        pnl.innerHTML = calendarHtml(yy, mm);
+        break;
+      }
       case 'save':
         saveEntry();
         break;
@@ -1180,6 +1298,9 @@
         break;
       case 'mode':
         app.repo.updateProfile({ mode: el.getAttribute('data-value') });
+        break;
+      case 'sex':
+        app.repo.updateProfile({ sex: el.getAttribute('data-value') });
         break;
       case 'weekstart':
         app.repo.updateProfile({ weekStartsOn: Number(el.getAttribute('data-value')) });

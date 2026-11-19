@@ -829,6 +829,59 @@
       n: waistSeries.length
     };
 
+    /* ---------- 腰高比 / RFM 体脂率（人群参考值） ---------- */
+    var bodyComp = {
+      available: false, reason: null,
+      whtr: null, bf: null, band: 5, level: null,
+      waistUsed: null, waistN: 0, staleDays: null, outOfRange: false, prev: null
+    };
+    var sex = (profile.sex === 'male' || profile.sex === 'female') ? profile.sex : null;
+    var heightCm = toNumber(profile.heightCm);
+
+    if (!sex) {
+      bodyComp.reason = 'no-sex';
+    } else if (!isNum(heightCm) || heightCm < 100 || heightCm > 250) {
+      bodyComp.reason = 'no-height';
+    } else if (!waistSeries.length) {
+      bodyComp.reason = 'no-waist';
+    } else {
+      var recentWaist = [];
+      for (var wi = 0; wi < waistSeries.length; wi++) {
+        if (waistSeries[wi].day > todayDay - 7) recentWaist.push(waistSeries[wi].v);
+      }
+      var waistUsed = recentWaist.length ? mean(recentWaist) : waistSeries[waistSeries.length - 1].v;
+      var whtr = waistUsed / heightCm;
+      var bf = (sex === 'male' ? 64 : 76) - 20 / whtr;
+
+      bodyComp.available = true;
+      bodyComp.whtr = whtr;
+      bodyComp.bf = bf;
+      bodyComp.band = bf < 15 ? 6 : 5;
+      bodyComp.level = whtr < 0.4 ? 'low' : (whtr < 0.5 ? 'healthy' : 'high');
+      bodyComp.waistUsed = waistUsed;
+      bodyComp.waistN = recentWaist.length;
+      bodyComp.outOfRange = whtr < 0.3 || whtr > 0.7;
+      if (!recentWaist.length) {
+        bodyComp.staleDays = todayDay - waistSeries[waistSeries.length - 1].day;
+      }
+
+      // 30 天前的对照（取最接近的腰围记录，容差 10 天）
+      var targetDay = todayDay - 30;
+      var best = null, bestDist = Infinity;
+      for (var wj = 0; wj < waistSeries.length; wj++) {
+        var dist = Math.abs(waistSeries[wj].day - targetDay);
+        if (dist < bestDist) { bestDist = dist; best = waistSeries[wj]; }
+      }
+      if (best && bestDist <= 10 && (todayDay - best.day) >= 21) {
+        var prevWhtr = best.v / heightCm;
+        bodyComp.prev = {
+          whtr: prevWhtr,
+          bf: (sex === 'male' ? 64 : 76) - 20 / prevWhtr,
+          days: todayDay - best.day
+        };
+      }
+    }
+
     var consistency = null;
     if (s28 && waistRate) {
       var wk = s28.kgPerWeek;
@@ -884,6 +937,7 @@
       forecast: forecast,
       target: target,
       waist: waist,
+      bodyComp: bodyComp,
       events: eventEffects(series, ema, entries, defs),
       consistency: consistency,
       quality: {
